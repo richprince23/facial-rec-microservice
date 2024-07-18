@@ -1,0 +1,6 @@
+flask
+face_recognition
+opencv-python
+pillow
+setuptools
+
