@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Video Recognition</title>
+    <style>
+        #video {
+            width: 640px;
+            height: 480px;
+            border: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+    <h1>Live Video Recognition</h1>
+    <video id="video" autoplay></video>
+
+    <div>
+        <p>Last Recognized : <b id="student_id"></b> </p>
+        
+    </div>
+    <script>
+
+        
+        // Get the recognized student id
+        const studentId = document.getElementById('student_id');
+
+        // Get the video element
+        const video = document.getElementById('video');
+
+        // Create a canvas to draw the video frames
+        const canvas = document.createElement('canvas');
+        canvas.width = 640;
+        canvas.height = 480;
+
+        // Get the canvas context
+        const ctx = canvas.getContext('2d');
+
+
+
+        let cameraList = [];
+        let stream;
+        const width = 480;
+        let height = 480;
+        const photo = document.getElementById("photo");
+        const startbutton = document.getElementById("capture");
+        // const canvas = document.getElementById("canvas");
+        const context = canvas.getContext("2d");
+        context.willReadFrequently = true;
+        // const video = document.getElementById("video");
+        const inputImage = document.getElementById("input-image");
+
+        const guidingBox = document.querySelector('.guiding-box');
+
+        // Get list of available camera devices
+        navigator.mediaDevices.enumerateDevices()
+            .then((devices) => {
+                devices.forEach((device) => {
+                    if (device.kind === 'videoinput') {
+                        cameraList.push(device.deviceId);
+                        const camSelect = document.querySelector("#camList");
+                        const option = document.createElement('option');
+                        option.value = device.deviceId;
+                        option.text = device.label;
+                    }
+                });
+            })
+            .catch((err) => {
+                console.error(`${err.name}: ${err.message}`);
+            });
+
+        // Video constraints
+        const constraints = {
+            video: {
+                width: 1280,
+                height: 720
+            },
+        };
+
+        // Start the selected camera
+        function startCam() {
+            navigator.mediaDevices.getUserMedia(constraints)
+                .then((mediaStream) => {
+                    stream = mediaStream;
+                    video.srcObject = mediaStream;
+                    video.onloadedmetadata = () => {
+                        video.play();
+
+                        height = video.videoHeight / (video.videoWidth / width);
+
+                        if (isNaN(height)) {
+                            height = width / (16 / 9);
+                        }
+
+                        video.setAttribute("width", width);
+                        video.setAttribute("height", height);
+                        canvas.setAttribute("width", width);
+                        canvas.setAttribute("height", height);
+
+                        guidingBox.style.height = (height - 20) + "px";
+                        guidingBox.style.width = (height - 20) + "px";
+                    };
+                })
+                .catch((err) => {
+                    console.error(`${err.name}: ${err.message}`);
+                });
+        }
+
+        // Change camera device
+        function changeCamera(cameraId) {
+            constraints.video.deviceId = cameraId;
+            startCam();
+        }
+
+        changeCamera(cameraList[1])
+        // Set up the video stream
+        navigator.mediaDevices.getUserMedia(constraints)
+            .then(stream => {
+                video.srcObject = stream;
+                video.play();
+
+                // Set up the recognition interval
+                setInterval(() => {
+                    // Draw the current video frame on the canvas
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                    // Get the canvas data URL
+                    const imageDataURL = canvas.toDataURL();
+
+                    console.log(imageDataURL);
+                    // Send the image data to the server for recognition
+                    fetch('/recognize_from_camera', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ image: imageDataURL })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            console.log(`Recognized face: ${data.student_id}`);
+                            studentId.innerText = data.student_id;
+                        } else {
+                            console.log('No match found');
+                            console.log(data.encoding);
+                        }
+                    })
+                    .catch(error => console.error('Error:', error));
+                }, 1000); // Recognize every 1 second
+            })
+            .catch(error => console.error('Error:', error));
+    </script>
+</body>
+</html>
