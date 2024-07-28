@@ -14,63 +14,98 @@
 </head>
 <body>
     <h1>Live Video Recognition</h1>
+    <select id="cameraSelect">
+        <option value="">Select a camera</option>
+    </select>
     <video id="video" autoplay></video>
 
     <div>
-        <p>Last Recognized : <b id="student_id"></b> </p>
+        <p>Last Recognized : <b id="student_id"></b></p>
     </div>
     <script>
-        // Get the recognized student id
         const studentId = document.getElementById('student_id');
-
-        // Get the video element
         const video = document.getElementById('video');
-
-        // Create a canvas to draw the video frames
+        const cameraSelect = document.getElementById('cameraSelect');
         const canvas = document.createElement('canvas');
         canvas.width = 640;
         canvas.height = 480;
-
-        // Get the canvas context
         const ctx = canvas.getContext('2d');
 
-        // Set up the video stream
-        navigator.mediaDevices.getUserMedia({ video: true })
-            .then(stream => {
+        let stream;
+        let recognitionInterval;
+
+        // Populate the camera selection dropdown
+        async function populateCameraOptions() {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(device => device.kind === 'videoinput');
+            videoDevices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device.deviceId;
+                option.text = device.label || `Camera ${cameraSelect.length + 1}`;
+                cameraSelect.appendChild(option);
+            });
+        }
+
+        // Start the video stream with the selected camera
+        async function startVideoStream(deviceId) {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            const constraints = {
+                video: {deviceId: deviceId ? {exact: deviceId} : undefined}
+            };
+            try {
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
-                video.play();
+                await video.play();
+                startRecognition();
+            } catch (error) {
+                console.error('Error accessing the camera:', error);
+            }
+        }
 
-                // Set up the recognition interval
-                setInterval(() => {
-                    // Draw the current video frame on the canvas
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        // Start the recognition process
+        function startRecognition() {
+            if (recognitionInterval) {
+                clearInterval(recognitionInterval);
+            }
+            recognitionInterval = setInterval(() => {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                canvas.toBlob(blob => {
+                    const formData = new FormData();
+                    formData.append('image', blob, 'frame.jpg');
+                    fetch('/recognize', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            console.log(`Recognized face: ${data.student_id}`);
+                            studentId.innerText = data.student_id;
+                        } else {
+                            console.log('No match found');
+                        }
+                    })
+                    .catch(error => console.error('Error:', error));
+                }, 'image/jpeg');
+            }, 3000);
+        }
 
-                    // Convert the canvas to a Blob
-                    canvas.toBlob(blob => {
-                        // Create a form data object
-                        const formData = new FormData();
-                        formData.append('image', blob, 'frame.jpg');
+        // Event listener for camera selection
+        cameraSelect.addEventListener('change', (event) => {
+            if (event.target.value) {
+                startVideoStream(event.target.value);
+            }
+        });
 
-                        // Send the image data to the server for recognition
-                        fetch('/recognize', {
-                            method: 'POST',
-                            body: formData
-                        })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.status === 'success') {
-                                console.log(`Recognized face: ${data.student_id}`);
-                                studentId.innerText = data.student_id;
-                            } else {
-                                console.log('No match found');
-                                // console.log(data);
-                            }
-                        })
-                        .catch(error => console.error('Error:', error));
-                    }, 'image/jpeg');
-                }, 3000); // Recognize every 1 second
-            })
-            .catch(error => console.error('Error:', error));
+        // Initialize
+        populateCameraOptions().then(() => {
+            if (cameraSelect.options.length > 1) {
+                cameraSelect.selectedIndex = 1;
+                startVideoStream(cameraSelect.value);
+            }
+        });
     </script>
 </body>
 </html>
