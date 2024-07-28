@@ -7,8 +7,19 @@ import os
 import json
 import numpy as np
 from flask_mysqldb import MySQL
+from flask_cors import CORS
+
+
 
 app = Flask(__name__)
+
+cors = CORS(app, resources={
+    r"/*": {
+        "origins": "http://localhost:8000",  
+        # "allow_headers": "Authorization, Content-Type, x-csrf-token"
+    }
+})
+
 
 devices = []
 mysql = MySQL(app)
