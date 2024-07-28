@@ -112,8 +112,8 @@ def register():
         return jsonify({'success': False, 'message': 'No image uploaded'})
 
     file = request.files['image']
-    filename, extension = os.path.splitext(file.filename)
-    new_filename = f'imgs/{int(time())}{extension}'
+    # filename, extension = os.path.splitext(file.filename)
+    # new_filename = f'imgs/{int(time())}{extension}'
 
     student_id = randint(20000000, 100000000)
     if not student_id:
@@ -122,8 +122,8 @@ def register():
     os.makedirs('imgs', exist_ok=True)
 
     try:
-        file.save(new_filename)
-        image = face_recognition.load_image_file(new_filename)
+        # file.save(new_filename)
+        image = face_recognition.load_image_file(file)
         encodings = face_recognition.face_encodings(image)
 
         if len(encodings) > 0:
