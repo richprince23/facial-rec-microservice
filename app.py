@@ -6,12 +6,33 @@ import cv2
 import os
 import json
 import numpy as np
+from flask_mysqldb import MySQL
+
 
 app = Flask(__name__)
 
 SAVED_FACES = {}
 SAVED_FACES_FILE = 'data/encoding_list.json'
 devices = []
+
+mysql = None
+
+def initDB():
+    print('Initializing database')
+    # Required
+    app.config["MYSQL_USER"] = "root"
+    app.config["MYSQL_PASSWORD"] = "Costero23#"
+    app.config["MYSQL_DB"] = "attendance_system_db"
+    global mysql
+    mysql = MySQL(app)
+
+def load_and_compare():
+    print('loading recs')
+    cur = mysql.connection.cursor()
+    cur.execute("""SELECT * FROM recognitions""")
+    rv = cur.fetchall()
+    print(cur)
+
 # save face encodings to np file
 def save_face_encoding(student_id, encoding):
     global SAVED_FACES
@@ -22,7 +43,7 @@ def save_face_encoding(student_id, encoding):
     # Save the updated encodings
     os.makedirs('data', exist_ok=True)
     try:
-        with open(SAVED_FACES_FILE, 'w') as f:
+        with open(SAVED_FACES_FILE, 'r+') as f:
             json.dump(SAVED_FACES, f)
         print(f'Encoding for student ID {student_id} {"updated" if student_id in SAVED_FACES else "added"}')
     except Exception as e:
@@ -202,12 +223,15 @@ def startSession():
 
 # main 
 if __name__ == '__main__':
+    initDB()
+    print("some")
+    load_and_compare()
     try:
         devices = list_camera_devices()
+        load_saved_encodings()
     except:
         print("Error getting camera devices")
     # os.makedirs('/data', exist_ok=True, mode=777)
 
-    load_saved_encodings()
-    app.run(port=3000, debug=True)
+    app.run(port=3000)
 
