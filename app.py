@@ -46,45 +46,43 @@ def query_db(query, args=None):
         print(e)
         return None
 
-# save face encodings to np file
+# save face encodings to the database
 def save_face_encoding(student_id, encoding):
-    global SAVED_FACES
-    
-    # Update or add the new encoding
-    SAVED_FACES[student_id] = encoding.tolist()  # Convert to list for JSON serialization
-    
-    # Save the updated encodings
-    os.makedirs('data', exist_ok=True)
     try:
-        with open(SAVED_FACES_FILE, 'r+') as f:
-            json.dump(SAVED_FACES, f)
-        print(f'Encoding for student ID {student_id} {"updated" if student_id in SAVED_FACES else "added"}')
+        cursor = get_db_connection()
+        if cursor is None:
+            return {'status': 'error', 'message': 'Database connection failed'}
+
+        # Check if the student ID already exists
+        query = "SELECT COUNT(*) FROM recognitionss WHERE student_id = %s"
+        cursor.execute(query, (student_id,))
+        exists = cursor.fetchone()[0]
+
+        if exists:
+            query = "UPDATE recognitionss SET face_encoding = %s WHERE student_id = %s"
+        else:
+            query = "INSERT INTO recognitionss (student_id, face_encoding) VALUES (%s, %s)"
+
+        cursor.execute(query, (student_id, json.dumps(encoding.tolist())))
+        mysql.connection.commit()
+        cursor.close()
+        return {'status': 'success', 'message': 'Encoding saved'}
     except Exception as e:
         print(f"Error saving encodings: {e}")
+        return {'status': 'error', 'message': str(e)}
 
-
-# retrieve encodings from file
+# retrieve encodings from database
 def load_saved_encodings():
-    global SAVED_FACES
-    if os.path.exists(SAVED_FACES_FILE):
-        try:
-            with open(SAVED_FACES_FILE, 'r') as f:
-                file_content = f.read().strip()
-                if file_content:  # Check if the file is not empty
-                    SAVED_FACES = json.loads(file_content)
-                    # Convert lists back to numpy arrays
-                    for student_id, encoding in SAVED_FACES.items():
-                        SAVED_FACES[student_id] = np.array(encoding)
-                    print('Encodings loaded')
-                else:
-                    print('Encoding file is empty, initializing with an empty dictionary')
-                    SAVED_FACES = {}
-        except json.JSONDecodeError:
-            print('Error decoding JSON, initializing with an empty dictionary')
-            SAVED_FACES = {}
-    else:
-        print('Encoding file does not exist, initializing with an empty dictionary')
-        SAVED_FACES = {}
+    try:
+        encodings = query_db("SELECT student_id, face_encoding FROM recognitionss")
+        saved_faces = {}
+        for student_id, encoding in encodings:
+            saved_faces[student_id] = np.array(json.loads(encoding))
+        print('Encodings loaded')
+        return saved_faces
+    except Exception as e:
+        print(f"Error loading encodings: {e}")
+        return {}
 
 def load_find():
     res = query_db("SELECT Concat (student_id, ':', face_encoding) FROM recognitionss")
@@ -101,7 +99,6 @@ def register():
     filename, extension = os.path.splitext(file.filename)
     new_filename = f'imgs/{int(time())}{extension}'
 
-    # student_id = request.form.get('student_id')
     student_id = randint(20000000, 100000000)
     if not student_id:
         return jsonify({'success': False, 'message': 'No student ID provided'})
@@ -115,16 +112,17 @@ def register():
 
         if len(encodings) > 0:
             encoding = encodings[0]
-            print(encoding)
-            save_face_encoding(student_id, encoding)
-            return jsonify({'status': 'success', 'message': 'Face registered successfully', 'encodings': str(encoding.tolist())}), 200
+            save_response = save_face_encoding(student_id, encoding)
+            if save_response['status'] == 'success':
+                return jsonify({'status': 'success', 'message': 'Face registered successfully', 'encodings': str(encoding.tolist())}), 200
+            else:
+                return jsonify({'status': 'error', 'message': save_response['message']}), 500
         else:
             return jsonify({'status': 'error', 'message': 'No face found in the image'}), 404
 
     except Exception as e:
         print(f"Error during image processing: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
-
 # Recognizes student from the image passed in the request
 @app.route('/recognize', methods=['POST'])
 def recognize():
@@ -137,10 +135,11 @@ def recognize():
 
     if len(encodings) > 0:
         encoding = encodings[0]
-        matches = face_recognition.compare_faces(list(SAVED_FACES.values()), encoding)
+        saved_faces = load_saved_encodings()
+        matches = face_recognition.compare_faces(list(saved_faces.values()), encoding)
         if True in matches:
             matched_idx = matches.index(True)
-            matched_name = list(SAVED_FACES.keys())[matched_idx]
+            matched_name = list(saved_faces.keys())[matched_idx]
             return jsonify({'status': 'success', 'student_id': matched_name})
         else:
             return jsonify({'status': 'error', 'message': 'No match found'})
@@ -197,37 +196,41 @@ def stream():
     return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
+
 # Capture a single frame and recognize face
 @app.route("/recognize_from_camera", methods=['POST'])
 def recognize_from_camera():
-    if len(devices) == 0:
-        return jsonify({'status': 'error', 'message': 'No camera devices found'})
+    # if len(devices) == 0:
+    #     return jsonify({'status': 'error', 'message': 'No camera devices found'})
 
-    if len(devices) >= 1:
-        cam = 1
-    else:
-        cam = 0
+    # if len(devices) >= 1:
+    #     cam = 1
+    # else:
+    #     cam = 0
 
-    camera = cv2.VideoCapture(1)
-    success, frame = camera.read()
-    camera.release()
+    # camera = cv2.VideoCapture(0)
+    # success, frame = camera.read()
+    # camera.release()
 
-    if not success:
+    # if not success:
+    #     return jsonify({'status': 'error', 'message': 'Failed to capture image from camera'})
+
+    if not 'image' in request.files:
         return jsonify({'status': 'error', 'message': 'Failed to capture image from camera'})
 
+    frame = request.files['image']
+    
     # Convert the frame to RGB format (required by face_recognition)
-
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     encodings = face_recognition.face_encodings(rgb_frame)
 
     if len(encodings) > 0:
         encoding = encodings[0]
-        known_encodings = list(SAVED_FACES.values())
-        print(known_encodings)
-        matches = face_recognition.compare_faces(list(SAVED_FACES.values()), encoding)
+        saved_faces = load_saved_encodings()
+        matches = face_recognition.compare_faces(list(saved_faces.values()), encoding)
         if True in matches:
             matched_idx = matches.index(True)
-            matched_name = list(SAVED_FACES.keys())[matched_idx]
+            matched_name = list(saved_faces.keys())[matched_idx]
             return jsonify({'status': 'success', 'student_id': matched_name, 'encoding': str(encoding)})
         else:
             return jsonify({'status': 'error', 'message': 'No match found', 'encoding': str(encoding)})

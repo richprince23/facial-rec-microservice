@@ -18,11 +18,8 @@
 
     <div>
         <p>Last Recognized : <b id="student_id"></b> </p>
-        
     </div>
     <script>
-
-        
         // Get the recognized student id
         const studentId = document.getElementById('student_id');
 
@@ -36,7 +33,6 @@
 
         // Get the canvas context
         const ctx = canvas.getContext('2d');
-        
 
         // Set up the video stream
         navigator.mediaDevices.getUserMedia({ video: true })
@@ -49,28 +45,29 @@
                     // Draw the current video frame on the canvas
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                    // Get the canvas data URL
-                    const imageDataURL = canvas.toDataURL();
+                    // Convert the canvas to a Blob
+                    canvas.toBlob(blob => {
+                        // Create a form data object
+                        const formData = new FormData();
+                        formData.append('image', blob, 'frame.jpg');
 
-                    // Send the image data to the server for recognition
-                    fetch('/recognize_from_camera', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ image: imageDataURL })
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            console.log(`Recognized face: ${data.student_id}`);
-                            studentId.innerText = data.student_id;
-                        } else {
-                            console.log('No match found');
-                            console.log(data.encoding);
-                        }
-                    })
-                    .catch(error => console.error('Error:', error));
+                        // Send the image data to the server for recognition
+                        fetch('/recognize', {
+                            method: 'POST',
+                            body: formData
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 'success') {
+                                console.log(`Recognized face: ${data.student_id}`);
+                                studentId.innerText = data.student_id;
+                            } else {
+                                console.log('No match found');
+                                console.log(data);
+                            }
+                        })
+                        .catch(error => console.error('Error:', error));
+                    }, 'image/jpeg');
                 }, 1000); // Recognize every 1 second
             })
             .catch(error => console.error('Error:', error));
