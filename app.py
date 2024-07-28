@@ -8,10 +8,12 @@ import json
 import numpy as np
 from flask_mysqldb import MySQL
 from flask_cors import CORS
+from config import Config
 
 
 
 app = Flask(__name__)
+
 
 cors = CORS(app, resources={
     r"/*": {
@@ -20,16 +22,12 @@ cors = CORS(app, resources={
     }
 })
 
+app.config.from_object(Config)
 
 devices = []
-mysql = MySQL(app)
-print('Initializing database')
 
-# Required
-app.config["MYSQL_USER"] = "root"
-app.config["MYSQL_PASSWORD"] = "Costero23#"
-app.config["MYSQL_DB"] = "attendance_system_db"
-app.config["MYSQL_HOST"] = "localhost"  # Ensure the host is set correctly
+mysql = MySQL(app)
+
 
 # init a connection
 def get_db_connection():
