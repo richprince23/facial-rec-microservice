@@ -63,12 +63,12 @@
                                 studentId.innerText = data.student_id;
                             } else {
                                 console.log('No match found');
-                                console.log(data);
+                                // console.log(data);
                             }
                         })
                         .catch(error => console.error('Error:', error));
                     }, 'image/jpeg');
-                }, 1000); // Recognize every 1 second
+                }, 3000); // Recognize every 1 second
             })
             .catch(error => console.error('Error:', error));
     </script>
