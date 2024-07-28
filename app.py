@@ -14,24 +14,37 @@ app = Flask(__name__)
 SAVED_FACES = {}
 SAVED_FACES_FILE = 'data/encoding_list.json'
 devices = []
+mysql = MySQL(app)
+print('Initializing database')
+# Required
+app.config["MYSQL_USER"] = "root"
+app.config["MYSQL_PASSWORD"] = "Costero23#"
+app.config["MYSQL_DB"] = "attendance_system_db"
 
-mysql = None
 
-def initDB():
-    print('Initializing database')
-    # Required
-    app.config["MYSQL_USER"] = "root"
-    app.config["MYSQL_PASSWORD"] = "Costero23#"
-    app.config["MYSQL_DB"] = "attendance_system_db"
-    global mysql
-    mysql = MySQL(app)
+# init a connection
+def get_db_connection():
+    try:
+        conn = mysql.connect()
+        cursor = conn.cursor()
+        return cursor
+    except Exception as e:
+        print(e)
+        return None
 
-def load_and_compare():
-    print('loading recs')
-    cur = mysql.connection.cursor()
-    cur.execute("""SELECT * FROM recognitions""")
-    rv = cur.fetchall()
-    print(cur)
+# define a general query function
+def query_db(query, args=None):
+    cursor = get_db_connection()
+    if cursor is None:
+        return None
+    try:
+        cursor.execute(query, args or ())
+        result = cursor.fetchall()
+        cursor.close()
+        return result
+    except Exception as e:
+        print(e)
+        return None
 
 # save face encodings to np file
 def save_face_encoding(student_id, encoding):
@@ -73,6 +86,11 @@ def load_saved_encodings():
         print('Encoding file does not exist, initializing with an empty dictionary')
         SAVED_FACES = {}
 
+def load_find():
+    res = query_db("SELECT Concat (student_id, ':', face_encoding) FROM recognitionss")
+    print(jsonify(res))
+    return jsonify(res)
+
 ### Registers a new face
 @app.route('/register', methods=['POST'])
 def register():
@@ -84,7 +102,7 @@ def register():
     new_filename = f'imgs/{int(time())}{extension}'
 
     # student_id = request.form.get('student_id')
-    student_id = randint(2, 100)
+    student_id = randint(20000000, 100000000)
     if not student_id:
         return jsonify({'success': False, 'message': 'No student ID provided'})
 
@@ -138,14 +156,15 @@ def home():
 # generate frames from video
 def generate_frames():
     # check for external cameras and use as default
-    if len(devices) > 1:
-        cam = 1
-    else:
-        cam = 0
+    cam = 1
 
     # initial camera with defautl device
     # camera = cv2.VideoCapture(devices[1])
-    camera = cv2.VideoCapture(1)
+    try:
+        camera = cv2.VideoCapture(1)
+    except: 
+        camera = cv2.VideoCapture(0)
+
     while True:
         success, frame = camera.read()
         if not success:
@@ -223,9 +242,6 @@ def startSession():
 
 # main 
 if __name__ == '__main__':
-    initDB()
-    print("some")
-    load_and_compare()
     try:
         devices = list_camera_devices()
         load_saved_encodings()
@@ -234,4 +250,6 @@ if __name__ == '__main__':
     # os.makedirs('/data', exist_ok=True, mode=777)
 
     app.run(port=3000)
+   
+    # load_and_compare()
 

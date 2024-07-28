@@ -36,86 +36,10 @@
 
         // Get the canvas context
         const ctx = canvas.getContext('2d');
+        
 
-
-
-        let cameraList = [];
-        let stream;
-        const width = 480;
-        let height = 480;
-        const photo = document.getElementById("photo");
-        const startbutton = document.getElementById("capture");
-        // const canvas = document.getElementById("canvas");
-        const context = canvas.getContext("2d");
-        context.willReadFrequently = true;
-        // const video = document.getElementById("video");
-        const inputImage = document.getElementById("input-image");
-
-        const guidingBox = document.querySelector('.guiding-box');
-
-        // Get list of available camera devices
-        navigator.mediaDevices.enumerateDevices()
-            .then((devices) => {
-                devices.forEach((device) => {
-                    if (device.kind === 'videoinput') {
-                        cameraList.push(device.deviceId);
-                        const camSelect = document.querySelector("#camList");
-                        const option = document.createElement('option');
-                        option.value = device.deviceId;
-                        option.text = device.label;
-                    }
-                });
-            })
-            .catch((err) => {
-                console.error(`${err.name}: ${err.message}`);
-            });
-
-        // Video constraints
-        const constraints = {
-            video: {
-                width: 1280,
-                height: 720
-            },
-        };
-
-        // Start the selected camera
-        function startCam() {
-            navigator.mediaDevices.getUserMedia(constraints)
-                .then((mediaStream) => {
-                    stream = mediaStream;
-                    video.srcObject = mediaStream;
-                    video.onloadedmetadata = () => {
-                        video.play();
-
-                        height = video.videoHeight / (video.videoWidth / width);
-
-                        if (isNaN(height)) {
-                            height = width / (16 / 9);
-                        }
-
-                        video.setAttribute("width", width);
-                        video.setAttribute("height", height);
-                        canvas.setAttribute("width", width);
-                        canvas.setAttribute("height", height);
-
-                        guidingBox.style.height = (height - 20) + "px";
-                        guidingBox.style.width = (height - 20) + "px";
-                    };
-                })
-                .catch((err) => {
-                    console.error(`${err.name}: ${err.message}`);
-                });
-        }
-
-        // Change camera device
-        function changeCamera(cameraId) {
-            constraints.video.deviceId = cameraId;
-            startCam();
-        }
-
-        changeCamera(cameraList[1])
         // Set up the video stream
-        navigator.mediaDevices.getUserMedia(constraints)
+        navigator.mediaDevices.getUserMedia({ video: true })
             .then(stream => {
                 video.srcObject = stream;
                 video.play();
@@ -128,7 +52,6 @@
                     // Get the canvas data URL
                     const imageDataURL = canvas.toDataURL();
 
-                    console.log(imageDataURL);
                     // Send the image data to the server for recognition
                     fetch('/recognize_from_camera', {
                         method: 'POST',
