@@ -157,6 +157,7 @@ def recognize():
         if True in matches:
             matched_idx = matches.index(True)
             matched_name = list(saved_faces.keys())[matched_idx]
+            print(f"Student is id {matched_name}")
             return jsonify({'status': 'success', 'student_id': matched_name})
         else:
             return jsonify({'status': 'error', 'message': 'No match found'})
